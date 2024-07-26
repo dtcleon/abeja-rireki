@@ -1,8 +1,9 @@
 import streamlit as st
-import pdfplumber
+import PyPDF2
 import pandas as pd
 import re
 from datetime import datetime
+import io
 
 def japanese_era_to_ad(year_string):
     era_to_ad = {
@@ -69,10 +70,10 @@ def extract_latest_directors(text):
     return directors
 
 def analyze_pdf(pdf_file):
-    with pdfplumber.open(pdf_file) as pdf:
-        text = ''
-        for page in pdf.pages:
-            text += page.extract_text() + '\n'
+    pdf_reader = PyPDF2.PdfReader(pdf_file)
+    text = ""
+    for page in pdf_reader.pages:
+        text += page.extract_text() + "\n"
     
     directors = extract_latest_directors(text)
     
@@ -92,6 +93,7 @@ def dataframe_to_markdown(df):
     return markdown
 
 def generate_report(df):
+    unique_directors = df['name'].nunique()
     report = f"""
 # 取締役会構成分析
 
@@ -105,14 +107,14 @@ def generate_report(df):
 
 ## 3. 取締役会の構成
 
-1. 取締役数：{len(df)}名
+1. 取締役数：{unique_directors}名
 2. 代表取締役：{'あり' if any(df['role'] == '代表取締役') else 'なし'}
 
 ## 4. 法的観点
 
 1. 取締役の員数：
    - 会社法上、取締役会設置会社では3名以上の取締役が必要
-   - 現在の取締役数（{len(df)}名）は、{'この要件を満たしています' if len(df) >= 3 else 'この要件を満たしていません'}
+   - 現在の取締役数（{unique_directors}名）は、{'この要件を満たしています' if unique_directors >= 3 else 'この要件を満たしていません'}
 
 2. 代表取締役：
    - 会社法上、取締役会設置会社では代表取締役を選定する必要があります
@@ -129,7 +131,8 @@ st.title('登記簿謄本分析アプリ')
 uploaded_file = st.file_uploader("登記簿謄本（全部事項）のPDFをアップロードしてください", type="pdf")
 
 if uploaded_file is not None:
-    df, extracted_text = analyze_pdf(uploaded_file)
+    pdf_file = io.BytesIO(uploaded_file.getvalue())
+    df, extracted_text = analyze_pdf(pdf_file)
     if not df.empty:
         report = generate_report(df)
         st.markdown(report)
